@@ -143,6 +143,10 @@ class LatentModel(Qwen2ForCausalLM):
         self.attention = SelfAttentionLayer(config.hidden_size)
 
     def generate_embs(self, input_ids, attention_mask):
+        """
+        得到的是形状 (B, L, H) 的矩阵，每个 token（包括 x 的 token、<|Thought|> token、以及后面的 y token）都有一个 embedding, 再把其中 <|Thought|> 的位置替换掉
+        整段序列的 embeddings（包含 x + <|Thought|> + y）,只是 <|Thought|> 那个位置的 embedding 不再是词表里学到的离散 token embedding，而是一个由额外注意力层计算出的连续向量 (r)
+        """
         output_mid = super().forward(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
         # generate embeddings
         thought_ids = self.model.embed_tokens.num_embeddings - 1  # thought id flag

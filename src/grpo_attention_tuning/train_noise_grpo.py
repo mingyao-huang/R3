@@ -29,19 +29,19 @@ def train(
     micro_batch_size: int = 8,
     sample: int = 2000,
     seed: int = 42,
-    cutoff_len: int = 512,
+    cutoff_len: int = 512, # 数据集的最大序列长度（token 数）
     output_dir: str = "output_dir/Video_Games/grpo_test",
     category: str = "Toys_and_Games", # category name
 
     num_generations: int = 8, # grpo args
     beta: float = 0.01, # KL coefficient
     num_iterations: int = 2, # number of iterations
-    epsilon: float = 0.2, # clipping value
+    epsilon: float = 0.2, # clipping value, 限制策略更新的幅度
     epsilon_high: float = 0.28, # 其实这两个一个是high，一个是low. 当没有high的时候，low就是high
-    max_completion_length: int = 256,
+    max_completion_length: int = 256, # 生成的最大完成长度(token数)
 
-    use_vllm: bool = False,
-    vllm_gpu_memory_utilization: float = 0.7,
+    use_vllm: bool = False, # 是否使用 vLLM（一个高效的 LLM 推理库）加速生成过程
+    vllm_gpu_memory_utilization: float = 0.7, # vLLM 的 GPU 内存利用率（0-1 之间）
 
     resume_from_checkpoint: str = None,
     local_rank: int = 0,
@@ -59,7 +59,7 @@ def train(
     # alloc_first(all_s=70)
     device_map = "auto"
     gradient_accumulation_steps = batch_size // micro_batch_size
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    world_size = int(os.environ.get("WORLD_SIZE", 1)) # 分布式训练的总进程数（通常等于 GPU 数量）
     ddp = world_size != 1
     if ddp:
         gradient_accumulation_steps = gradient_accumulation_steps // world_size
@@ -82,11 +82,11 @@ def train(
 
     tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
 
-    assert tokenizer("<|Thought|>")['input_ids'][0] == len(tokenizer) - 1
+    assert tokenizer("<|Thought|>")['input_ids'][0] == len(tokenizer) - 1 # 将<Thought>映射到最后一个id并验证
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
-    tokenizer.padding_side = "left"
+    tokenizer.padding_side = "left" # 左填充再因果注意力模型中，对于注意力计算和内容生成更友好
 
     hash_dict = get_prefix_data(info_file, tokenizer)
 
@@ -109,7 +109,7 @@ def train(
     #############################
     # Initialize the GRPO trainer
     #############################
-    def reward(completions, targets, **kwargs):
+    def reward(completions, targets, **kwargs): # 计算奖励，若预测正确则奖励1，否则0
         def strip_(a):
             return a.strip().strip('\n').strip('\"')
         # aa=[1 if strip_(com) == strip_(tar) else 0 for com, tar in zip(completions, targets)]
@@ -134,8 +134,8 @@ def train(
             use_vllm=use_vllm,
             vllm_gpu_memory_utilization=vllm_gpu_memory_utilization,
             learning_rate=lr,
-            beta=beta,
-            num_iterations=num_iterations,
+            beta=beta, # KL散度系数，值越小，越保守，越接近原始策略
+            num_iterations=num_iterations, # GRPO的迭代次数（每个batch内）
             epsilon=epsilon,
             epsilon_high=epsilon_high,
             num_train_epochs=num_epochs,

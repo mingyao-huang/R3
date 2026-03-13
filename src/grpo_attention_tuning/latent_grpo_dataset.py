@@ -17,7 +17,7 @@ def get_hash(x):
 def get_prefix_data(info_file, tokenizer):
     with open(info_file, 'r') as f:
         info = f.readlines()
-        info = ["\"" + _.split('\t')[0].strip(' ') + "\"\n" for _ in info]
+        info = ["\"" + _.split('\t')[0].strip(' ') + "\"\n" for _ in info] # 前后添加双引号
         # 千万别把下面这两行对齐，就这个写法，不然会多出空格
         # Don't align the next two lines, otherwise it will add an extra space!
         info = [f'''### Response: 
@@ -25,21 +25,21 @@ def get_prefix_data(info_file, tokenizer):
     prefixID = [tokenizer(_).input_ids for _ in info]
     thought_id = len(tokenizer) - 1
     for i in range(len(prefixID)):
-        prefixID[i].insert(4, thought_id)
+        prefixID[i].insert(4, thought_id) # 在 prefixID[i] 列表（一个token ID列表）的索引4位置（即第5个元素前）插入 thought_id 的值
     hash_dict = dict()
     for index, ID in enumerate(prefixID):
         ID.append(tokenizer.eos_token_id)
         for i in range(5, len(ID)):
             if i == 5:
-                hash_number = get_hash(ID[:i])
+                hash_number = get_hash(ID[:i]) # <Thought> 位置前
             else:
-                hash_number = get_hash(ID[5:i])
+                hash_number = get_hash(ID[5:i]) # <Thought> 位置后
             if hash_number not in hash_dict:
                 hash_dict[hash_number] = set()
             hash_dict[hash_number].add(ID[i])
 
     for key in hash_dict.keys():
-        hash_dict[key] = list(hash_dict[key])
+        hash_dict[key] = list(hash_dict[key]) # set 转 list，方便后续索引
     return hash_dict
 
 
@@ -80,9 +80,9 @@ class D3Dataset(Dataset):
         self.test = test
         self.max_len = max_len
         self.category = category
-        self.K = K
-        self.dedup = dedup
-        self.instructs = [
+        self.K = K # 没用到？
+        self.dedup = dedup # 是否去重
+        self.instructs = [ # 目的是为了预测用户下一个交互的类别
             f"Given a list of {category} the user recetenly enjoy, please write a new {category} that the user may bought",
         ]
         self.get_inputs()
@@ -106,7 +106,7 @@ class D3Dataset(Dataset):
 {data_point["output"]}"""
 
     def get_history(self, row):
-        row['history_item_title'] = eval(row['history_item_title'])
+        row['history_item_title'] = eval(row['history_item_title']) # 将字符串转换为实际的可操作的Python列表
         L = len(row['history_item_title'])
         history = ""
         for i in range(L):
@@ -120,7 +120,7 @@ class D3Dataset(Dataset):
         last_history_item_id = eval(row["history_item_id"])[-1]
         return {"input": f"The user has palyed the following {self.category}s before: {history}",
                 "output": target_item + '\n',
-                "dedup": target_item_id == last_history_item_id}
+                "dedup": target_item_id == last_history_item_id} # dedup 表示目标物品是否与历史最后一个物品相同
 
     def pre(self, idx):
         instruction = f"""Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request. 
@@ -130,11 +130,12 @@ class D3Dataset(Dataset):
 """
         tokens = self.tokenizer.encode(instruction, bos=True, eos=False)
 
-        history = self.get_history(self.data.iloc[idx])
+        history = self.get_history(self.data.iloc[idx]) # iloc：按整数位置（索引）访问数据
         target_item = history['output']
         history['output'] = ''
         negative_prompt_ids = copy.deepcopy(tokens)
 
+        # Instruction + History + <|Thought|>
         prompt = self.generate_prompt(history)
         tokens = tokens + self.tokenizer.encode(prompt, bos=False, eos=False)
         history["input"] = ""
@@ -150,6 +151,7 @@ class D3Dataset(Dataset):
                 # "select_index": select_index,
             }
 
+        # 对于训练集来说，进一步加上label： Instruction + History + <|Thought|> + Label
         golden_tokens = self.tokenizer.encode(target_item, bos=False, eos=True)
         input_prompt_len = len(tokens)
         tokens = tokens + golden_tokens

@@ -100,7 +100,7 @@ class LatentRDataset(Dataset):
         last_history_item_id = eval(row["history_item_id"])[-1]
         return {"input": f"The user has palyed the following {self.category}s before: {history}",
                 "output": target_item + '\n',
-                "dedup": target_item_id == last_history_item_id}
+                "dedup": target_item_id == last_history_item_id} # 去重
     
     def pre(self, idx):
         instruction =  f"""Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request. 
